@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cursor Trail with Borders and Fade Effects</title>
+    <title>Smoother Cursor Trail with Borders and Fade Effects</title>
     <style>
         body {
             margin: 0;
@@ -18,6 +18,7 @@
             pointer-events: none; /* Allows clicks to pass through */
             z-index: 10;
             transform: translate(-50%, -50%);
+            will-change: transform, opacity; /* Optimize for animations */
         }
         
         .image-container img {
@@ -26,7 +27,10 @@
             opacity: 0;  /* Start invisible for fade-in */
             display: block;
             border: 2px solid black; /* Adding the 2pt black border */
-            transition: opacity 0.5s ease-in; /* Fade in transition */
+            transition: opacity 0.3s ease-in, width 0.3s ease-out; /* Smoother transitions */
+            backface-visibility: hidden; /* Prevent flickering */
+            transform: translateZ(0); /* Force GPU acceleration */
+            -webkit-transform: translateZ(0);
         }
     </style>
 </head>
@@ -45,19 +49,36 @@
             'https://res.cloudinary.com/djyhapimn/image/upload/v1746177386/IMAG0063_vtgxwn.jpg'
         ];
         
+        // Preload images for smoother display
+        function preloadImages() {
+            imageUrls.forEach(url => {
+                const img = new Image();
+                img.src = url;
+            });
+        }
+        
         // Keep track of image elements
         const maxImages = 15; // Fewer images for a shorter trail
         const imageElements = [];
         let currentImageIndex = 0;
         
-        // Track mouse movement
+        // Track mouse movement with interpolation
         let lastX = 0;
         let lastY = 0;
+        let targetX = 0;
+        let targetY = 0;
         let lastPlacedTime = 0;
-        const placementInterval = 100; // Increased interval for fewer images
+        const placementInterval = 80; // Slightly faster placement for smoother trail
+        
+        // Animation timing
+        let lastFrameTime = 0;
+        const interpolationFactor = 0.3; // Smooth movement factor (0-1)
         
         // Initialize
         function init() {
+            // Preload images
+            preloadImages();
+            
             // Create image elements
             for (let i = 0; i < maxImages; i++) {
                 const container = document.createElement('div');
@@ -75,22 +96,37 @@
             document.addEventListener('mousemove', handleMouseMove);
             
             // Start the animation loop
-            requestAnimationFrame(updateTrail);
+            requestAnimationFrame(animate);
         }
         
         // Handle mouse movement
         function handleMouseMove(e) {
-            const currentTime = Date.now();
+            // Update target position
+            targetX = e.clientX;
+            targetY = e.clientY;
+        }
+        
+        // Main animation loop
+        function animate(timestamp) {
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
             
-            // Store current mouse position
-            lastX = e.clientX;
-            lastY = e.clientY;
+            // Smoothly interpolate current position toward target position
+            lastX += (targetX - lastX) * interpolationFactor;
+            lastY += (targetY - lastY) * interpolationFactor;
             
-            // Place images at intervals
-            if (currentTime - lastPlacedTime > placementInterval) {
+            // Check if it's time to place a new image
+            if (timestamp - lastPlacedTime > placementInterval) {
                 placeImageAtCursor();
-                lastPlacedTime = currentTime;
+                lastPlacedTime = timestamp;
             }
+            
+            // Update trail animations
+            updateTrail(timestamp);
+            
+            // Continue animation loop
+            requestAnimationFrame(animate);
         }
         
         // Place a new image at the current cursor position
@@ -104,8 +140,15 @@
             // Get the image element
             const img = element.querySelector('img');
             
-            // Set a random image from our cloudinary URLs
-            img.src = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+            // Select random image - preload next image for better performance
+            const randomIndex = Math.floor(Math.random() * imageUrls.length);
+            img.src = imageUrls[randomIndex];
+            
+            // Preload next potential image
+            if (Math.random() > 0.5) {
+                const nextImg = new Image();
+                nextImg.src = imageUrls[(randomIndex + 1) % imageUrls.length];
+            }
             
             // Randomize size between 160px and 240px (larger sizes)
             const size = 160 + Math.floor(Math.random() * 80);
@@ -121,14 +164,16 @@
             void img.offsetWidth;
             
             // Now set to visible to trigger the fade-in transition
-            img.style.opacity = '1';
+            requestAnimationFrame(() => {
+                img.style.opacity = '1';
+            });
             
             // Move to the next image element in our pool
             currentImageIndex = (currentImageIndex + 1) % maxImages;
         }
         
         // Update the image trail (fade out old images)
-        function updateTrail() {
+        function updateTrail(timestamp) {
             const currentTime = Date.now();
             
             // Update each image's opacity based on its age
@@ -150,9 +195,6 @@
                     }
                 }
             }
-            
-            // Continue the animation loop
-            requestAnimationFrame(updateTrail);
         }
         
         // Start the effect when the page loads
