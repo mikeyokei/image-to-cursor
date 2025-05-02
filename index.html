@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cursor Following Images</title>
+    <title>Cursor Trail with Borders and Fade Effects</title>
     <style>
         body {
             margin: 0;
@@ -16,103 +16,149 @@
         .image-container {
             position: absolute;
             pointer-events: none; /* Allows clicks to pass through */
-            transform: translate(-50%, -50%);
-            transition: opacity 0.8s, top 0.3s, left 0.3s; /* Smoother transitions */
             z-index: 10;
+            transform: translate(-50%, -50%);
         }
         
         .image-container img {
-            width: 100px;
+            width: 200px; /* Larger base size */
             height: auto;
-            opacity: 0.8;
+            opacity: 0;  /* Start invisible for fade-in */
+            display: block;
+            border: 2px solid black; /* Adding the 2pt black border */
+            transition: opacity 0.5s ease-in; /* Fade in transition */
         }
     </style>
 </head>
 <body>
     <script>
-        // Array of image URLs - replace with your own images or cloud storage URLs
+        // Configuration
+        const cloudName = 'djyhapimn'; // Your Cloudinary cloud name
+        
+        // Using your provided Cloudinary URLs
         const imageUrls = [
             'https://res.cloudinary.com/djyhapimn/image/upload/v1746177383/IMG_8110_2_bcjwyr.jpg',
             'https://res.cloudinary.com/djyhapimn/image/upload/v1746177374/IMG_2764_2_zwkzel.jpg',
-            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177380/IMG_2581_2_zzmkbb.heic',
+            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177374/IMG_2766_2_tl21t7.jpg',
             'https://res.cloudinary.com/djyhapimn/image/upload/v1746177365/81118d83a21444d8f5af3d94f7c26ec5_lsale7.jpg',
-            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177363/187ab3c01c1c59150f37ac767e3abccc_yo6dv9.jpg'
+            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177363/187ab3c01c1c59150f37ac767e3abccc_yo6dv9.jpg',
+            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177366/Layer_0_c7akul.png',
+            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177366/Layer_1_dumx0k.png',
+            'https://res.cloudinary.com/djyhapimn/image/upload/v1746177386/IMAG0063_vtgxwn.jpg'
         ];
         
         // Keep track of image elements
-        const maxImages = 20; // Increased for longer tail
+        const maxImages = 15; // Fewer images for a shorter trail
         const imageElements = [];
         let currentImageIndex = 0;
         
-        // Create initial image elements
-        for (let i = 0; i < maxImages; i++) {
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            
-            const img = document.createElement('img');
-            img.src = imageUrls[Math.floor(Math.random() * imageUrls.length)];
-            container.appendChild(img);
-            
-            document.body.appendChild(container);
-            container.style.opacity = '0';
-            imageElements.push(container);
-        }
-        
         // Track mouse movement
-        document.addEventListener('mousemove', (e) => {
-            // Get current image element
-            const currentElement = imageElements[currentImageIndex];
-            
-            // Position the image at cursor
-            currentElement.style.left = `${e.clientX}px`;
-            currentElement.style.top = `${e.clientY}px`;
-            
-            // Make image visible
-            currentElement.style.opacity = '1';
-            
-            // Randomize size
-            const size = 50 + Math.random() * 100;
-            currentElement.querySelector('img').style.width = `${size}px`;
-            
-            // Change image source randomly sometimes
-            if (Math.random() < 0.2) {
-                currentElement.querySelector('img').src = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+        let lastX = 0;
+        let lastY = 0;
+        let lastPlacedTime = 0;
+        const placementInterval = 100; // Increased interval for fewer images
+        
+        // Initialize
+        function init() {
+            // Create image elements
+            for (let i = 0; i < maxImages; i++) {
+                const container = document.createElement('div');
+                container.className = 'image-container';
+                
+                const img = document.createElement('img');
+                img.src = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+                container.appendChild(img);
+                
+                document.body.appendChild(container);
+                imageElements.push(container);
             }
             
-            // No rotation - images stay straight
-            currentElement.style.transform = `translate(-50%, -50%)`;
+            // Start tracking mouse movement
+            document.addEventListener('mousemove', handleMouseMove);
             
-            // Move to next image element
-            currentImageIndex = (currentImageIndex + 1) % maxImages;
-            
-            // Fade out previous images more slowly to create longer tail effect
-            setTimeout(() => {
-                currentElement.style.opacity = '0';
-            }, 3000);
-        });
+            // Start the animation loop
+            requestAnimationFrame(updateTrail);
+        }
         
-        // Function to load images from cloud storage
-        async function loadImagesFromCloud(cloudUrl) {
-            try {
-                const response = await fetch(cloudUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        // Update image URLs from cloud storage
-                        imageUrls.length = 0; // Clear existing URLs
-                        data.forEach(item => {
-                            if (item.url) imageUrls.push(item.url);
-                        });
-                        console.log('Successfully loaded images from cloud storage');
+        // Handle mouse movement
+        function handleMouseMove(e) {
+            const currentTime = Date.now();
+            
+            // Store current mouse position
+            lastX = e.clientX;
+            lastY = e.clientY;
+            
+            // Place images at intervals
+            if (currentTime - lastPlacedTime > placementInterval) {
+                placeImageAtCursor();
+                lastPlacedTime = currentTime;
+            }
+        }
+        
+        // Place a new image at the current cursor position
+        function placeImageAtCursor() {
+            const element = imageElements[currentImageIndex];
+            
+            // Position the image at the cursor location
+            element.style.left = `${lastX}px`;
+            element.style.top = `${lastY}px`;
+            
+            // Get the image element
+            const img = element.querySelector('img');
+            
+            // Set a random image from our cloudinary URLs
+            img.src = imageUrls[Math.floor(Math.random() * imageUrls.length)];
+            
+            // Randomize size between 160px and 240px (larger sizes)
+            const size = 160 + Math.floor(Math.random() * 80);
+            img.style.width = `${size}px`;
+            
+            // Store the time when this image was placed
+            element.dataset.placedTime = Date.now().toString();
+            
+            // Reset opacity to 0 first
+            img.style.opacity = '0';
+            
+            // Force a reflow to ensure the transition works
+            void img.offsetWidth;
+            
+            // Now set to visible to trigger the fade-in transition
+            img.style.opacity = '1';
+            
+            // Move to the next image element in our pool
+            currentImageIndex = (currentImageIndex + 1) % maxImages;
+        }
+        
+        // Update the image trail (fade out old images)
+        function updateTrail() {
+            const currentTime = Date.now();
+            
+            // Update each image's opacity based on its age
+            for (let i = 0; i < imageElements.length; i++) {
+                const element = imageElements[i];
+                
+                // If this element has been placed on screen
+                if (element.dataset.placedTime) {
+                    const placedTime = parseInt(element.dataset.placedTime);
+                    const age = currentTime - placedTime;
+                    const img = element.querySelector('img');
+                    
+                    // Keep fully visible for 3 seconds, then fade out over 1.5 seconds
+                    if (age > 3000) {
+                        // For the fade-out, we'll use direct style changes instead of transitions
+                        // This ensures the fade-out happens only when needed
+                        const fadeOutFactor = Math.max(0, 1 - ((age - 3000) / 1500));
+                        img.style.opacity = fadeOutFactor.toString();
                     }
                 }
-            } catch (error) {
-                console.error('Failed to load images from cloud:', error);
             }
+            
+            // Continue the animation loop
+            requestAnimationFrame(updateTrail);
         }
         
-        // Uncomment and modify this line to load from your cloud storage
-        // window.onload = () => loadImagesFromCloud('https://your-cloud-storage-api/images');
+        // Start the effect when the page loads
+        window.onload = init;
     </script>
 </body>
 </html>
